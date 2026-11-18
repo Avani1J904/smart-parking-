@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Backend & Database Console — ParkEase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .console-tab-btn { border-radius: 12px !important; font-weight: 600; padding: .6rem 1.1rem; color: #475569; border: 1px solid transparent; }
+    .console-tab-btn.active { background: var(--primary) !important; color: #fff !important; box-shadow: 0 8px 20px rgba(37,99,235,.22); }
+    .table-pill { border: 1px solid var(--border); background: #fff; color: #334155; font-weight: 600; border-radius: 999px; padding: .42rem .9rem; font-size: .84rem; transition: all .15s ease; }
+    .table-pill:hover { border-color: var(--primary); color: var(--primary); }
+    .table-pill.active { background: #eff6ff; border-color: var(--primary); color: var(--primary); }
+    .json-viewer { background: #0f172a; color: #e2e8f0; border-radius: 14px; padding: 16px; max-height: 400px; overflow: auto; font-size: .82rem; line-height: 1.5; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .status-dot.online { background: #16a34a; box-shadow: 0 0 0 4px rgba(22,163,74,.18); }
+    .status-dot.offline { background: #ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,.18); }
+    .status-dot.checking { background: #f59e0b; }
+    .db-table td, .db-table th { font-size: .84rem; white-space: nowrap; }
+    .compact-input { min-height: 38px !important; font-size: .88rem; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-custom">
+  <div class="container-fluid px-3 px-lg-4 py-1">
+    <a class="navbar-brand d-flex align-items-center gap-2" href="index.html">
+      <span class="brand-mark"><i class="bi bi-database-fill-gear"></i></span>
+      <span class="brand-text">ParkEase <span class="text-primary-custom fs-6 fw-semibold">Backend & DB</span></span>
+    </a>
+    <button class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#topNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div id="topNav" class="collapse navbar-collapse">
+      <ul class="navbar-nav me-auto ms-lg-3 gap-lg-1">
+        <li class="nav-item"><a class="nav-link" href="index.html"><i class="bi bi-house me-1"></i>Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="parking.html"><i class="bi bi-p-square me-1"></i>Find Parking</a></li>
+        <li class="nav-item"><a class="nav-link" href="dashboard.html"><i class="bi bi-grid me-1"></i>User Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="admin/dashboard.html"><i class="bi bi-speedometer2 me-1"></i>Admin View</a></li>
+      </ul>
+      <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
+        <span id="navStatusBadge" class="badge badge-soft" style="background:#fef3c7;color:#92400e">
+          <span class="status-dot checking me-1"></span> Connecting...
+        </span>
+        <button id="refreshAllBtn" class="btn btn-outline-custom btn-sm py-2 px-3">
+          <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+        </button>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main class="container-fluid px-3 px-lg-4 py-4">
+
+  <!-- Connection & Admin Auth Bar -->
+  <div class="panel p-3 p-lg-4 mb-4">
+    <div class="row g-3 align-items-end">
+      <div class="col-lg-6">
+        <label class="small-label mb-1"><i class="bi bi-hdd-network me-1"></i>Backend API Server URL</label>
+        <div class="input-group">
+          <input id="apiBaseInput" type="url" class="form-control compact-input mono" placeholder="https://smart-parking-system-4-5gmh.onrender.com">
+          <button id="connectBtn" class="btn btn-primary-custom py-0 px-3" type="button">Connect</button>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mt-2">
+          <button type="button" class="btn btn-sm btn-light border preset-url" data-url="https://smart-parking-system-4-5gmh.onrender.com">
+            <i class="bi bi-cloud-check text-primary me-1"></i>Render Live
+          </button>
+          <button type="button" class="btn btn-sm btn-light border preset-url" data-url="http://localhost:5000">
+            <i class="bi bi-laptop text-success me-1"></i>Localhost (:5000)
+          </button>
+          <button type="button" class="btn btn-sm btn-light border preset-url" data-url="SAME_ORIGIN">
+            <i class="bi bi-globe me-1"></i>Same Origin
+          </button>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <!-- Logged-out Login Panel -->
+        <div id="authLoggedOut">
+          <label class="small-label mb-1"><i class="bi bi-shield-lock me-1"></i>Admin Access (Required for full DB tables)</label>
+          <form id="adminLoginForm" class="row g-2">
+            <div class="col-sm-5">
+              <input id="loginEmail" type="email" class="form-control compact-input" value="admin@parkease.com" placeholder="Admin email" required>
+            </div>
+            <div class="col-sm-4">
+              <input id="loginPassword" type="password" class="form-control compact-input" value="Admin@123" placeholder="Password" required>
+            </div>
+            <div class="col-sm-3 d-grid">
+              <button type="submit" class="btn btn-primary-custom py-0">Login</button>
+            </div>
+          </form>
+          <div class="small text-muted-custom mt-1">Default demo admin is pre-filled (<span class="mono">admin@parkease.com / Admin@123</span>).</div>
+        </div>
+
+        <!-- Logged-in Panel -->
+        <div id="authLoggedIn" class="d-none">
+          <label class="small-label mb-1"><i class="bi bi-person-badge me-1"></i>Active Session</label>
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 p-2 px-3 rounded-3 border bg-light">
+            <div>
+              <span class="fw-bold" id="sessionUserName">Admin</span>
+              <span class="badge badge-soft badge-available ms-1" id="sessionUserRole">ADMIN</span>
+              <div class="small text-muted-custom mono" id="sessionUserEmail">admin@parkease.com</div>
+            </div>
+            <button id="logoutBtn" class="btn btn-sm btn-outline-danger rounded-3">
+              <i class="bi bi-box-arrow-right me-1"></i>Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="connectionAlert" class="alert alert-warning mt-3 mb-0 py-2 small d-none"></div>
+  </div>
+
+  <!-- Live KPI Strip -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-xl-2">
+      <div class="stat-card p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="small-label">Backend API</span>
+          <i class="bi bi-activity text-primary fs-5"></i>
+        </div>
+        <div class="stat-value fs-4" id="kpiHealth">—</div>
+        <div class="small text-muted-custom mono" id="kpiLatency">Checking...</div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="stat-card p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="small-label">Database</span>
+          <i class="bi bi-database text-success fs-5"></i>
+        </div>
+        <div class="stat-value fs-4" id="kpiDbEngine">SQLite</div>
+        <div class="small text-muted-custom mono" id="kpiDbMeta">parking.db</div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="stat-card p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="small-label">Users</span>
+          <i class="bi bi-people text-primary fs-5"></i>
+        </div>
+        <div class="stat-value fs-4" id="kpiUsers">—</div>
+        <div class="small text-muted-custom">Registered accounts</div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="stat-card p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="small-label">Parking Slots</span>
+          <i class="bi bi-p-square text-info fs-5"></i>
+        </div>
+        <div class="stat-value fs-4" id="kpiSlots">—</div>
+        <div class="small text-muted-custom" id="kpiSlotsFree">Available / Total</div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="stat-card p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="small-label">Bookings</span>
+          <i class="bi bi-calendar-check text-warning fs-5"></i>
+        </div>
+        <div class="stat-value fs-4" id="kpiBookings">—</div>
+        <div class="small text-muted-custom" id="kpiDailyBookings">Today's activity</div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-2">
+      <div class="stat-card p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="small-label">Today Revenue</span>
+          <i class="bi bi-currency-rupee text-success fs-5"></i>
+        </div>
+        <div class="stat-value fs-4" id="kpiRevenue">—</div>
+        <div class="small text-muted-custom" id="kpiServerDate">Server time</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Workspace Tabs -->
+  <ul class="nav nav-pills gap-2 mb-3" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link console-tab-btn active" data-bs-toggle="pill" data-bs-target="#tab-db" type="button">
+        <i class="bi bi-table me-1"></i> Live Database Tables
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link console-tab-btn" data-bs-toggle="pill" data-bs-target="#tab-add" type="button">
+        <i class="bi bi-plus-circle me-1"></i> Add Database Entries
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link console-tab-btn" data-bs-toggle="pill" data-bs-target="#tab-api" type="button">
+        <i class="bi bi-terminal me-1"></i> Backend API Monitor & Tester
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link console-tab-btn" data-bs-toggle="pill" data-bs-target="#tab-analytics" type="button">
+        <i class="bi bi-graph-up me-1"></i> Live Analytics & Zones
+      </button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+
+    <!-- TAB 1: DATABASE EXPLORER -->
+    <div class="tab-pane fade show active" id="tab-db">
+      <div class="table-card">
+        <div class="p-3 p-lg-4 border-bottom">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+            <div>
+              <h5 class="fw-bold mb-1">Database Explorer</h5>
+              <p class="small text-muted-custom mb-0" id="dbModeSubtitle">Inspect live SQLite rows directly from your backend.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+              <input id="dbSearchInput" type="search" class="form-control compact-input" style="width:230px" placeholder="Filter rows...">
+              <button id="exportCsvBtn" class="btn btn-outline-custom btn-sm py-2 px-3">
+                <i class="bi bi-download me-1"></i>Export CSV
+              </button>
+            </div>
+          </div>
+
+          <div id="tableSelectorBar" class="d-flex flex-wrap gap-2">
+            <!-- Table pills populated dynamically -->
+          </div>
+        </div>
+
+        <div class="table-responsive" style="max-height:520px">
+          <table class="table table-hover align-middle mb-0 db-table">
+            <thead class="table-light sticky-top" id="dbTableHead"></thead>
+            <tbody id="dbTableBody">
+              <tr><td class="text-center py-5 text-muted-custom">Connecting to backend database...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-3 border-top bg-light d-flex justify-content-between align-items-center small text-muted-custom">
+          <span id="dbRowSummary">0 rows shown</span>
+          <span class="mono" id="dbLastUpdated">Last synced: —</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: ADD ENTRIES -->
+    <div class="tab-pane fade" id="tab-add">
+      <div class="row g-4">
+        <!-- Form 1: Add User -->
+        <div class="col-lg-4">
+          <div class="panel p-4 h-100">
+            <div class="d-flex align-items-center gap-2 mb-3">
+              <span class="stat-icon" style="width:40px;height:40px;font-size:18px"><i class="bi bi-person-plus"></i></span>
+              <div>
+                <h6 class="fw-bold mb-0">Add User</h6>
+                <div class="small text-muted-custom mono">POST /api/auth/register</div>
+              </div>
+            </div>
+            <form id="addUserForm" class="d-flex flex-column gap-2">
+              <div>
+                <label class="small-label mb-1">Full Name</label>
+                <input name="full_name" class="form-control compact-input" placeholder="e.g. Priya Mehta" required>
+              </div>
+              <div>
+                <label class="small-label mb-1">Email</label>
+                <input name="email" type="email" class="form-control compact-input" placeholder="priya@example.com" required>
+              </div>
+              <div>
+                <label class="small-label mb-1">Mobile (10 digits)</label>
+                <input name="mobile" class="form-control compact-input" placeholder="9876543210" required>
+              </div>
+              <div>
+                <label class="small-label mb-1">Password</label>
+                <input name="password" type="password" class="form-control compact-input" value="User@1234" required>
+              </div>
+              <button type="submit" class="btn btn-primary-custom mt-2">
+                <i class="bi bi-plus-lg me-1"></i>Insert into users
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Form 2: Add Booking -->
+        <div class="col-lg-4">
+          <div class="panel p-4 h-100">
+            <div class="d-flex align-items-center gap-2 mb-3">
+              <span class="stat-icon" style="width:40px;height:40px;font-size:18px;background:#fef3c7;color:#b45309"><i class="bi bi-calendar-plus"></i></span>
+              <div>
+                <h6 class="fw-bold mb-0">Add Booking</h6>
+                <div class="small text-muted-custom mono">POST /api/bookings</div>
+              </div>
+            </div>
+            <form id="addBookingForm" class="d-flex flex-column gap-2">
+              <div>
+                <label class="small-label mb-1">Select Parking Slot</label>
+                <select id="bookingSlotSelect" name="slot_id" class="form-select compact-input" required></select>
+              </div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="small-label mb-1">Vehicle Type</label>
+                  <select name="vehicle_type" class="form-select compact-input">
+                    <option value="CAR">CAR</option>
+                    <option value="BIKE">BIKE</option>
+                    <option value="EV">EV</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label class="small-label mb-1">Vehicle No</label>
+                  <input name="vehicle_no" class="form-control compact-input" value="MP09 AB 1234" required>
+                </div>
+              </div>
+              <div class="row g-2">
+                <div class="col-6">
+                  <label class="small-label mb-1">Date</label>
+                  <input id="bookingDateInput" name="date" type="date" class="form-control compact-input" required>
+                </div>
+                <div class="col-3">
+                  <label class="small-label mb-1">Start</label>
+                  <input name="start_time" type="time" class="form-control compact-input" value="14:00" required>
+                </div>
+                <div class="col-3">
+                  <label class="small-label mb-1">Hours</label>
+                  <input name="duration_hours" type="number" min="1" max="12" value="2" class="form-control compact-input" required>
+                </div>
+              </div>
+              <div class="form-check mt-1">
+                <input class="form-check-input" type="checkbox" id="autoPayCheck" checked>
+                <label class="form-check-label small" for="autoPayCheck">Auto-complete demo UPI payment (<span class="mono">CONFIRMED</span>)</label>
+              </div>
+              <button type="submit" class="btn btn-primary-custom mt-2">
+                <i class="bi bi-plus-lg me-1"></i>Insert into bookings
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Form 3: Add Location & Slot -->
+        <div class="col-lg-4">
+          <div class="panel p-4 h-100 d-flex flex-column gap-4">
+            <div>
+              <div class="d-flex align-items-center gap-2 mb-3">
+                <span class="stat-icon" style="width:40px;height:40px;font-size:18px;background:#dcfce7;color:#166534"><i class="bi bi-geo-alt"></i></span>
+                <div>
+                  <h6 class="fw-bold mb-0">Add Parking Location</h6>
+                  <div class="small text-muted-custom mono">POST /api/admin/locations</div>
+                </div>
+              </div>
+              <form id="addLocationForm" class="d-flex flex-column gap-2">
+                <input name="name" class="form-control compact-input" placeholder="Location name (e.g. Airport Hub)" required>
+                <input name="address" class="form-control compact-input" placeholder="Address (e.g. Terminal 1, Gate 4)">
+                <button type="submit" class="btn btn-outline-custom py-2">
+                  <i class="bi bi-plus-lg me-1"></i>Add Location
+                </button>
+              </form>
+            </div>
+
+            <hr class="my-0">
+
+            <div>
+              <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="stat-icon" style="width:40px;height:40px;font-size:18px;background:#f3e8ff;color:#7e22ce"><i class="bi bi-p-circle"></i></span>
+                <div>
+                  <h6 class="fw-bold mb-0">Add Parking Slot</h6>
+                  <div class="small text-muted-custom mono">POST /api/admin/slots</div>
+                </div>
+              </div>
+              <form id="addSlotForm" class="row g-2">
+                <div class="col-6">
+                  <select id="slotZoneSelect" name="zone_id" class="form-select compact-input" required></select>
+                </div>
+                <div class="col-6">
+                  <input name="slot_no" class="form-control compact-input" placeholder="Slot # (e.g. A-99)" required>
+                </div>
+                <div class="col-6">
+                  <select name="vehicle_type" class="form-select compact-input">
+                    <option value="CAR">CAR</option>
+                    <option value="BIKE">BIKE</option>
+                    <option value="EV">EV</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <input name="rate_per_hour" type="number" class="form-control compact-input" value="60" placeholder="Rate ₹/hr" required>
+                </div>
+                <div class="col-12 d-grid">
+                  <button type="submit" class="btn btn-outline-custom py-2">
+                    <i class="bi bi-plus-lg me-1"></i>Add Slot
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: BACKEND API MONITOR & PLAYGROUND -->
+    <div class="tab-pane fade" id="tab-api">
+      <div class="row g-4">
+        <div class="col-lg-5">
+          <div class="table-card h-100">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="fw-bold mb-0">Backend Endpoint Health</h6>
+                <div class="small text-muted-custom">Live HTTP ping checks</div>
+              </div>
+              <button id="runEndpointsBtn" class="btn btn-sm btn-primary-custom py-1 px-3">
+                <i class="bi bi-play-fill me-1"></i>Test All
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="table align-middle mb-0 db-table">
+                <thead class="table-light">
+                  <tr><th>Endpoint</th><th>Status</th><th>Latency</th><th></th></tr>
+                </thead>
+                <tbody id="endpointHealthBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <div class="panel p-4 h-100">
+            <h6 class="fw-bold mb-1">Interactive API Playground</h6>
+            <p class="small text-muted-custom mb-3">Send live requests to your Flask backend and inspect raw JSON responses.</p>
+            <form id="apiTesterForm" class="row g-2 mb-3">
+              <div class="col-sm-3">
+                <select id="testerMethod" class="form-select compact-input mono fw-semibold">
+                  <option>GET</option>
+                  <option>POST</option>
+                  <option>PUT</option>
+                  <option>DELETE</option>
+                </select>
+              </div>
+              <div class="col-sm-7">
+                <input id="testerPath" class="form-control compact-input mono" value="/api/parking/locations" required>
+              </div>
+              <div class="col-sm-2 d-grid">
+                <button type="submit" class="btn btn-primary-custom py-0">Send</button>
+              </div>
+              <div class="col-12">
+                <textarea id="testerBody" rows="3" class="form-control mono small" placeholder='Optional JSON body for POST/PUT, e.g. {"status":"AVAILABLE"}'></textarea>
+              </div>
+            </form>
+            <div class="d-flex justify-content-between align-items-center mb-2 small">
+              <span class="fw-semibold">Response Output</span>
+              <span id="testerStatusMeta" class="mono text-muted-custom">Ready</span>
+            </div>
+            <pre id="testerOutput" class="json-viewer mono mb-0">// Click "Send" or any endpoint "Inspect" button to view live JSON here.</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: LIVE ANALYTICS -->
+    <div class="tab-pane fade" id="tab-analytics">
+      <div class="row g-4">
+        <div class="col-lg-8">
+          <div class="panel p-4 h-100">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h5 class="fw-bold mb-0">Live Occupancy Trend</h5>
+                <div class="small text-muted-custom">Powered by <span class="mono">GET /api/admin/summary</span></div>
+              </div>
+              <span class="badge badge-soft badge-available" id="analyticsDateBadge">Today</span>
+            </div>
+            <canvas id="liveOccupancyChart" height="110"></canvas>
+          </div>
+        </div>
+        <div class="col-lg-4">
+          <div class="panel p-4 h-100">
+            <h5 class="fw-bold mb-3">Zone Availability</h5>
+            <div id="liveZoneList" class="d-flex flex-column gap-3">
+              <div class="small text-muted-custom">Log in as Admin to load live zone metrics.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- Toast Notification -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1080">
+  <div id="consoleToast" class="toast align-items-center border-0 shadow" role="alert">
+    <div class="d-flex">
+      <div class="toast-body fw-semibold" id="consoleToastBody">Done</div>
+      <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/backend-dashboard.js"></script>
+</body>
+</html>
